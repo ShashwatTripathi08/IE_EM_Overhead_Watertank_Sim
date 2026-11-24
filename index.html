@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Overhead Water Tank — Engineering Mechanics Simulator</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --navy: #0f172a;
+      --slate: #475569;
+      --blue: #0284c7;
+      --red: #dc2626;
+      --green: #16a34a;
+      --amber: #d97706;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { margin: 0; padding: 20px; background: var(--bg); color: var(--navy); }
+    .container { max-width: 1120px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+    h1 { margin: 0; font-size: 1.45rem; letter-spacing: -0.02em; }
+    .subtitle { margin: 4px 0 0; font-size: 0.9rem; color: var(--slate); }
+    .badge { padding: 8px 16px; border-radius: 999px; font-weight: 700; font-size: 0.9rem; }
+    .badge.safe { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .badge.fail { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; box-shadow: 0 2px 10px rgba(15,23,42,0.04); }
+    canvas { width: 100%; height: auto; display: block; border-radius: 10px; background: #f1f5f9; border: 1px solid #cbd5e1; }
+    .presets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    button { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--navy); font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: 0.15s; }
+    button:hover { background: #e2e8f0; }
+    button.critical { border-color: #fca5a5; color: var(--red); background: #fef2f2; }
+    .control { margin-bottom: 14px; }
+    .control-header { display: flex; justify-content: space-between; font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; accent-color: var(--blue); cursor: pointer; }
+    .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+    .metric { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+    .metric-label { font-size: 0.74rem; color: var(--slate); text-transform: uppercase; letter-spacing: 0.03em; }
+    .metric-val { font-size: 1.05rem; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; font-size: 0.78rem; color: var(--slate); }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Overhead Water Tank — Statics &amp; Stability Simulator</h1>
+        <p class="subtitle">Group 3 (AI&amp;ML D) | b = 4.0 m, Max Water Depth h<sub>w</sub> = 2.5 m, Staging = 6.0 m</p>
+      </div>
+      <div id="statusBadge" class="badge safe">STATUS: STABLE &amp; SAFE</div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <canvas id="simCanvas" width="640" height="540"></canvas>
+        <div class="legend">
+          <span><i class="dot" style="background:#0284c7"></i>Weight (W) &amp; Water</span>
+          <span><i class="dot" style="background:#dc2626"></i>Wind (F<sub>w</sub>) / Active Brace</span>
+          <span><i class="dot" style="background:#16a34a"></i>Base Reactions (R<sub>Ay</sub>, R<sub>By</sub>)</span>
+          <span><i class="dot" style="background:#d97706"></i>Friction (F<sub>f</sub>) &amp; CG (Y<sub>G</sub>)</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="presets">
+          <button onclick="setPreset(2.5, 0, 0.45)">Normal Full (No Wind)</button>
+          <button onclick="setPreset(2.5, 65, 0.45)">Storm — Full Tank</button>
+          <button class="critical" onclick="setPreset(0.0, 65, 0.45)">Storm — Empty (Critical!)</button>
+        </div>
+
+        <div class="control">
+          <div class="control-header">
+            <span>Water Depth (h<sub>w</sub>)</span>
+            <span id="valHw">2.50 m (100%)</span>
+          </div>
+          <input type="range" id="sliderHw" min="0" max="2.5" step="0.05" value="2.5" />
+        </div>
+
+        <div class="control">
+          <div class="control-header">
+            <span>Lateral Wind Force (F<sub>w</sub>)</span>
+            <span id="valFw">35 kN</span>
+          </div>
+          <input type="range" id="sliderFw" min="0" max="150" step="1" value="35" />
+        </div>
+
+        <div class="control">
+          <div class="control-header">
+            <span>Soil Friction Coefficient (&mu;<sub>s</sub>)</span>
+            <span id="valMu">0.45</span>
+          </div>
+          <input type="range" id="sliderMu" min="0.20" max="0.75" step="0.01" value="0.45" />
+        </div>
+
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-label">Total Weight (W)</div>
+            <div class="metric-val" id="outW">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Combined CG (Y<sub>G</sub>)</div>
+            <div class="metric-val" id="outYG">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Windward Reaction (R<sub>Ay</sub>)</div>
+            <div class="metric-val" id="outRAy">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Leeward Reaction (R<sub>By</sub>)</div>
+            <div class="metric-val" id="outRBy">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Hydrostatic Force (F<sub>H</sub>)</div>
+            <div class="metric-val" id="outFH">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Max Friction (&mu;<sub>s</sub>N)</div>
+            <div class="metric-val" id="outFmax">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">FOS (Overturning)</div>
+            <div class="metric-val" id="outFosO">—</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">FOS (Sliding)</div>
+            <div class="metric-val" id="outFosS">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    const sliderHw = document.getElementById('sliderHw');
+    const sliderFw = document.getElementById('sliderFw');
+    const sliderMu = document.getElementById('sliderMu');
+
+    // Structural constants matching Group 3 Report
+    const b = 4.0;       // Tank & base width (m)
+    const L = 4.0;       // Tank wall length (m)
+    const Hs = 6.0;      // Staging height (m)
+    const Ht = 2.8;      // Total tank container height (m)
+    const gamma = 9.81;  // Specific weight of water (kN/m^3)
+    const Wd = 150.0;    // Dead weight of tank + frame (kN)
+    const y1 = 6.2;      // Centroid height of empty structure (m)
+    const yw = Hs + Ht / 2; // Height of wind resultant = 7.4 m
+
+    let wavePhase = 0;
+
+    function setPreset(hw, fw, mu) {
+      sliderHw.value = hw;
+      sliderFw.value = fw;
+      sliderMu.value = mu;
+    }
+
+    function drawArrow(x1, y1, x2, y2, color, label = '', lineWidth = 3) {
+      const head = 10;
+      const angle = Math.atan2(y2 - y1, x2 - x1);
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = lineWidth;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - head * Math.cos(angle - Math.PI / 6), y2 - head * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(x2 - head * Math.cos(angle + Math.PI / 6), y2 - head * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fill();
+
+      if (label) {
+        ctx.font = 'bold 12px Inter, sans-serif';
+        ctx.fillText(label, x2 + (Math.cos(angle) >= 0 ? 6 : -54), y2 + (Math.sin(angle) >= 0 ? 14 : -6));
+      }
+      ctx.restore();
+    }
+
+    function render() {
+      const hw = parseFloat(sliderHw.value);
+      const Fw = parseFloat(sliderFw.value);
+      const mu = parseFloat(sliderMu.value);
+
+      // Physics Calculations
+      const Ww = gamma * b * L * hw;
+      const W = Wd + Ww;
+      const y2 = Hs + hw / 2;
+      const YG = (Wd * y1 + Ww * y2) / W;
+
+      const Mo = Fw * yw;             // Overturning moment about B
+      const Mr = W * (b / 2);         // Restoring moment about B
+      const RBy = (W * (b / 2) + Fw * yw) / b;
+      const RAy = W - RBy;
+      const FH = 0.5 * gamma * hw * hw * L;
+      const Fmax = mu * W;
+
+      const fosOverturn = Fw === 0 ? Infinity : Mr / Mo;
+      const fosSlide = Fw === 0 ? Infinity : Fmax / Fw;
+
+      const overturningFail = RAy < 0;
+      const slidingFail = Fw > Fmax;
+
+      // Update UI Telemetry
+      document.getElementById('valHw').textContent = `${hw.toFixed(2)} m (${Math.round((hw / 2.5) * 100)}%)`;
+      document.getElementById('valFw').textContent = `${Fw.toFixed(0)} kN`;
+      document.getElementById('valMu').textContent = mu.toFixed(2);
+
+      document.getElementById('outW').textContent = `${W.toFixed(1)} kN`;
+      document.getElementById('outYG').textContent = `${YG.toFixed(2)} m`;
+      document.getElementById('outRAy').textContent = `${RAy.toFixed(1)} kN` + (overturningFail ? ' (UPLIFT!)' : '');
+      document.getElementById('outRAy').style.color = overturningFail ? '#dc2626' : '#16a34a';
+      document.getElementById('outRBy').textContent = `${RBy.toFixed(1)} kN`;
+      document.getElementById('outFH').textContent = `${FH.toFixed(1)} kN`;
+      document.getElementById('outFmax').textContent = `${Fmax.toFixed(1)} kN`;
+      document.getElementById('outFosO').textContent = fosOverturn === Infinity ? '∞' : fosOverturn.toFixed(2);
+      document.getElementById('outFosO').style.color = fosOverturn < 1 ? '#dc2626' : '#0f172a';
+      document.getElementById('outFosS').textContent = fosSlide === Infinity ? '∞' : fosSlide.toFixed(2);
+      document.getElementById('outFosS').style.color = fosSlide < 1 ? '#dc2626' : '#0f172a';
+
+      const badge = document.getElementById('statusBadge');
+      if (overturningFail && slidingFail) {
+        badge.className = 'badge fail';
+        badge.textContent = 'FAILURE: OVERTURNING & SLIDING';
+      } else if (overturningFail) {
+        badge.className = 'badge fail';
+        badge.textContent = 'FAILURE: WIND OVERTURNING (UPLIFT AT A)';
+      } else if (slidingFail) {
+        badge.className = 'badge fail';
+        badge.textContent = 'FAILURE: BASE SLIDING';
+      } else {
+        badge.className = 'badge safe';
+        badge.textContent = 'STATUS: STABLE & SAFE';
+      }
+
+      // Draw Scene
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const scale = 38; // px per meter
+      const groundY = 465;
+      const centerX = 320;
+      const leftX = centerX - (b * scale) / 2;
+      const rightX = centerX + (b * scale) / 2;
+      const platformY = groundY - Hs * scale;
+      const tankTopY = platformY - Ht * scale;
+
+      // Ground & Soil Stratum
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, groundY);
+      ctx.lineTo(canvas.width, groundY);
+      ctx.stroke();
+
+      // Foundation Footing
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillRect(leftX - 24, groundY - 12, b * scale + 48, 12);
+
+      // Staging Columns
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(leftX, groundY - 12);
+      ctx.lineTo(leftX, platformY);
+      ctx.moveTo(rightX, groundY - 12);
+      ctx.lineTo(rightX, platformY);
+      ctx.stroke();
+
+      // Horizontal Struts (Zero-force when Fw === 0)
+      const bay1Y = groundY - (Hs / 2) * scale;
+      ctx.save();
+      ctx.strokeStyle = Fw === 0 ? '#94a3b8' : '#334155';
+      ctx.lineWidth = 4;
+      if (Fw === 0) ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      ctx.moveTo(leftX, bay1Y);
+      ctx.lineTo(rightX, bay1Y);
+      ctx.stroke();
+      ctx.restore();
+      if (Fw === 0) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.fillText('Zero-Force Strut', centerX - 42, bay1Y - 6);
+      }
+
+      // Diagonal Bracing (Lights up red under wind shear)
+      ctx.save();
+      ctx.strokeStyle = Fw > 0 ? '#dc2626' : '#cbd5e1';
+      ctx.lineWidth = Fw > 0 ? 3.5 : 2;
+      ctx.beginPath();
+      // Upper bay X-brace
+      ctx.moveTo(leftX, platformY); ctx.lineTo(rightX, bay1Y);
+      ctx.moveTo(rightX, platformY); ctx.lineTo(leftX, bay1Y);
+      // Lower bay X-brace
+      ctx.moveTo(leftX, bay1Y); ctx.lineTo(rightX, groundY - 12);
+      ctx.moveTo(rightX, bay1Y); ctx.lineTo(leftX, groundY - 12);
+      ctx.stroke();
+      ctx.restore();
+
+      // Platform Girder
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(leftX - 10, platformY - 8, b * scale + 20, 10);
+
+      // Animated Water Inside Tank
+      if (hw > 0.01) {
+        const waterH = hw * scale;
+        const waterTopY = platformY - 8 - waterH;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(leftX + 3, platformY - 8);
+        for (let x = leftX + 3; x <= rightX - 3; x += 6) {
+          const wave = Math.sin((x * 0.07) + wavePhase) * (Fw > 0 ? 2.8 : 1.0);
+          ctx.lineTo(x, waterTopY + wave);
+        }
+        ctx.lineTo(rightX - 3, platformY - 8);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(2, 132, 199, 0.45)';
+        ctx.fill();
+        ctx.restore();
+
+        // Hydrostatic Triangular Pressure Prism on Right Wall
+        const prismW = Math.min(72, hw * 28);
+        ctx.save();
+        ctx.fillStyle = 'rgba(2, 132, 199, 0.22)';
+        ctx.strokeStyle = '#0284c7';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(rightX, waterTopY);
+        ctx.lineTo(rightX + prismW, platformY - 8);
+        ctx.lineTo(rightX, platformY - 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Resultant F_H arrow at hw/3 from tank base
+        const fhY = (platformY - 8) - (waterH / 3);
+        drawArrow(rightX + prismW * 0.85, fhY, rightX + 4, fhY, '#0284c7', `FH (hw/3)`, 2.2);
+        ctx.restore();
+      }
+
+      // Tank Container Outline
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(leftX, tankTopY, b * scale, Ht * scale - 8);
+
+      // Combined CG Marker (YG)
+      const cgY = groundY - YG * scale;
+      ctx.save();
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.arc(centerX, cgY, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#92400e';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.fillText(`CG (${YG.toFixed(2)}m)`, centerX + 10, cgY + 4);
+      ctx.restore();
+
+      // Force Vectors
+      // 1. Gravity Weight W
+      drawArrow(centerX, cgY + 8, centerX, cgY + 58, '#0284c7', `W=${W.toFixed(0)}kN`, 3);
+
+      // 2. Lateral Wind Force Fw
+      if (Fw > 0) {
+        const windLen = 30 + (Fw / 150) * 95;
+        const windY = groundY - yw * scale;
+        drawArrow(leftX - windLen - 10, windY, leftX - 6, windY, '#dc2626', `Fw=${Fw}kN`, 3.5);
+      }
+
+      // 3. Support Reactions RAy & RBy
+      const rAyLen = Math.min(60, Math.max(20, Math.abs(RAy) / 6));
+      if (overturningFail) {
+        drawArrow(leftX, groundY + 4, leftX, groundY + 4 + rAyLen, '#dc2626', `UPLIFT!`, 3);
+      } else {
+        drawArrow(leftX, groundY + 4 + rAyLen, leftX, groundY + 4, '#16a34a', `RAy`, 3);
+      }
+      const rByLen = Math.min(68, Math.max(22, RBy / 6));
+      drawArrow(rightX, groundY + 4 + rByLen, rightX, groundY + 4, '#16a34a', `RBy`, 3);
+
+      // 4. Base Friction Ff
+      if (Fw > 0) {
+        const ffColor = slidingFail ? '#dc2626' : '#d97706';
+        drawArrow(centerX + 45, groundY - 4, centerX - 35, groundY - 4, ffColor, slidingFail ? 'SLIDING!' : 'Ff', 3);
+      }
+
+      // Labels A & B
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.fillText('Hinge A', leftX - 58, groundY - 14);
+      ctx.fillText('Roller B', rightX + 12, groundY - 14);
+
+      wavePhase += 0.05;
+      requestAnimationFrame(render);
+    }
+
+    render();
+  </script>
+</body>
+</html>
